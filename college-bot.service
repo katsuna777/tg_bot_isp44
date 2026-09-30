@@ -1,0 +1,15 @@
+[Unit]
+Description=College Moderation Bot
+After=network.target
+
+[Service]
+WorkingDirectory=/home/user/bot
+ExecStart=/usr/bin/python3 main.py
+Restart=always
+RestartSec=5
+Environment=BOT_TOKEN=токен_от_BotFather
+Environment=SUPER_ADMIN_ID=123456789
+Environment=CHAT_ID=-100123456789
+
+[Install]
+WantedBy=multi-user.target
