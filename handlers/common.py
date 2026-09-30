@@ -31,6 +31,7 @@ BTN_DELETE_YES = "Да, удалить"
 BTN_CUSTOM = "Своё значение"
 BTN_CUSTOM_SHORT = "Своё"
 BTN_ADMIN_ADD = "Добавить админа"
+BTN_RESET = "Сбросить счётчик"
 BTN_PREV = "◀"
 BTN_NEXT = "▶"
 

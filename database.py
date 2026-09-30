@@ -52,6 +52,15 @@ async def init_db() -> None:
                 UNIQUE(user_id, chat_id)
             )"""
         )
+        await db.execute(
+            """CREATE TABLE IF NOT EXISTS violations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                chat_id INTEGER NOT NULL,
+                kind TEXT NOT NULL,
+                created_at INTEGER
+            )"""
+        )
         # Суперадмин всегда в таблице admins (неудаляемый — проверяется в хендлерах)
         await db.execute(
             "INSERT OR IGNORE INTO admins (user_id, added_at) VALUES (?, ?)",
@@ -251,6 +260,62 @@ async def remove_mute(user_id: int, chat_id: int | None = None) -> None:
     async with aiosqlite.connect(config.DB_PATH) as db:
         await db.execute(
             "DELETE FROM mutes WHERE user_id = ? AND chat_id = ?",
+            (user_id, chat_id),
+        )
+        await db.commit()
+
+
+# ---------- violations ----------
+
+async def log_violation(user_id: int, kind: str,
+                        chat_id: int | None = None) -> None:
+    """kind: 'mute' или 'slow'."""
+    chat_id = chat_id or config.CHAT_ID
+    async with aiosqlite.connect(config.DB_PATH) as db:
+        await db.execute(
+            "INSERT INTO violations (user_id, chat_id, kind, created_at)"
+            " VALUES (?, ?, ?, ?)",
+            (user_id, chat_id, kind, _now()),
+        )
+        await db.commit()
+
+
+async def get_violation_counts(user_id: int,
+                               chat_id: int | None = None) -> dict[str, int]:
+    chat_id = chat_id or config.CHAT_ID
+    async with aiosqlite.connect(config.DB_PATH) as db:
+        async with db.execute(
+            "SELECT kind, COUNT(*) FROM violations"
+            " WHERE user_id = ? AND chat_id = ? GROUP BY kind",
+            (user_id, chat_id),
+        ) as cur:
+            rows = await cur.fetchall()
+    counts = {"mute": 0, "slow": 0}
+    for kind, n in rows:
+        if kind in counts:
+            counts[kind] = n
+    return counts
+
+
+async def get_violation_totals(
+        chat_id: int | None = None) -> dict[int, int]:
+    """user_id -> общее число срабатываний."""
+    chat_id = chat_id or config.CHAT_ID
+    async with aiosqlite.connect(config.DB_PATH) as db:
+        async with db.execute(
+            "SELECT user_id, COUNT(*) FROM violations"
+            " WHERE chat_id = ? GROUP BY user_id",
+            (chat_id,),
+        ) as cur:
+            return {uid: n async for uid, n in cur}
+
+
+async def clear_violations(user_id: int,
+                           chat_id: int | None = None) -> None:
+    chat_id = chat_id or config.CHAT_ID
+    async with aiosqlite.connect(config.DB_PATH) as db:
+        await db.execute(
+            "DELETE FROM violations WHERE user_id = ? AND chat_id = ?",
             (user_id, chat_id),
         )
         await db.commit()

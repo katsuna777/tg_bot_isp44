@@ -1,6 +1,7 @@
 """Молчаливая модерация группы: только удаление, никаких ответов."""
 from __future__ import annotations
 
+import logging
 import time
 
 from telegram import Update
@@ -8,6 +9,8 @@ from telegram.ext import ContextTypes
 
 import config
 import database
+
+log = logging.getLogger("college_bot")
 
 
 async def moderate_group(update: Update,
@@ -29,8 +32,12 @@ async def moderate_group(update: Update,
     if mute is not None:
         try:
             await msg.delete()
-        except Exception:
-            pass
+            log.info("DELETE mute user_id=%s msg_id=%s",
+                     user.id, msg.message_id)
+        except Exception as e:
+            log.info("DELETE-FAIL mute user_id=%s msg_id=%s err=%r",
+                     user.id, msg.message_id, e)
+        await database.log_violation(user.id, "mute", chat.id)
         return
 
     # 2. Медленный режим
@@ -43,7 +50,12 @@ async def moderate_group(update: Update,
     if last is not None and now - int(last) < interval:
         try:
             await msg.delete()
-        except Exception:
-            pass
+            log.info("DELETE slow user_id=%s msg_id=%s elapsed=%ss/%ss",
+                     user.id, msg.message_id, now - int(last), interval)
+        except Exception as e:
+            log.info("DELETE-FAIL slow user_id=%s msg_id=%s err=%r",
+                     user.id, msg.message_id, e)
+        await database.log_violation(user.id, "slow", chat.id)
         return
     await database.touch_last_message(user.id, chat.id)
+    log.info("ALLOW slow user_id=%s msg_id=%s", user.id, msg.message_id)

@@ -66,6 +66,7 @@ async def show_members(message, context: ContextTypes.DEFAULT_TYPE,
     total = await database.count_members()
     members = await database.get_members(
         limit=PAGE_SIZE, offset=page * PAGE_SIZE)
+    totals = await database.get_violation_totals()
     context.user_data["screen"] = "members"
     context.user_data["page"] = page
     context.user_data["list_ids"] = [m["user_id"] for m in members]
@@ -77,8 +78,11 @@ async def show_members(message, context: ContextTypes.DEFAULT_TYPE,
                  "Нажми <b>номер</b>, чтобы открыть карточку.\n"]
         base = page * PAGE_SIZE
         for i, m in enumerate(members, start=base + 1):
-            lines.append(
-                f"{i}. {display_name(m['full_name'], m['username'], m['user_id'])}")
+            line = (f"{i}. {display_name(m['full_name'], m['username'], m['user_id'])}")
+            n = totals.get(m["user_id"], 0)
+            if n:
+                line += f" (сраб.: {n})"
+            lines.append(line)
         pages = (total + PAGE_SIZE - 1) // PAGE_SIZE
         if pages > 1:
             lines.append(f"\nСтр. {page + 1}/{pages}")
@@ -113,16 +117,20 @@ async def show_card(message, context: ContextTypes.DEFAULT_TYPE,
         return
     mute = await database.get_mute(user_id)
     restr = await database.get_restriction(user_id)
+    counts = await database.get_violation_counts(user_id)
     context.user_data["screen"] = "card"
     context.user_data["selected"] = user_id
 
     uname = f" · @{m['username'].lstrip('@')}" if m["username"] else ""
     header = (f"<b>{m['full_name'] or '—'}</b>\n"
               f"<code>{m['user_id']}</code>{uname}")
+    stats = (f"\n\nСрабатываний: мут — {counts['mute']}, "
+             f"медленный — {counts['slow']}")
     if mute:
         status = f"<b>Статус:</b> мут до {fmt_until(mute['until'])}"
         rows = [[BTN_MUTE_EDIT, BTN_UNMUTE],
                 [BTN_SLOW, BTN_DELETE],
+                [BTN_RESET],
                 [BTN_BACK]]
     elif restr:
         status = (f"<b>Статус:</b> {interval_label(restr['interval_minutes'])}"
@@ -130,13 +138,16 @@ async def show_card(message, context: ContextTypes.DEFAULT_TYPE,
                      if restr["created_at"] else ""))
         rows = [[BTN_SLOW_EDIT, BTN_UNSLOW],
                 [BTN_MUTE, BTN_DELETE],
+                [BTN_RESET],
                 [BTN_BACK]]
     else:
         status = "<b>Статус:</b> без ограничений"
         rows = [[BTN_SLOW, BTN_MUTE],
                 [BTN_DELETE],
+                [BTN_RESET],
                 [BTN_BACK]]
-    await send_screen(message, context, f"{header}\n\n{status}", kb(*rows))
+    await send_screen(message, context, f"{header}\n\n{status}{stats}",
+                      kb(*rows))
 
 
 # ---------- ограниченные ----------
@@ -146,12 +157,24 @@ async def show_restricted(message,
     slow, mutes = await database.get_restricted()
     context.user_data["screen"] = "restricted"
     items: list[tuple[int, str]] = []
+    counts_cache: dict[int, dict[str, int]] = {}
+
+    async def suffix(uid: int) -> str:
+        c = counts_cache.get(uid)
+        if c is None:
+            c = await database.get_violation_counts(uid)
+            counts_cache[uid] = c
+        total = c["mute"] + c["slow"]
+        return f" (сраб.: {total})" if total else ""
+
     for r in slow:
         items.append((r["user_id"],
-                      f"{r['full_name']} — {interval_label(r['interval_minutes'])}"))
+                      f"{r['full_name']} — {interval_label(r['interval_minutes'])}"
+                      f"{await suffix(r['user_id'])}"))
     for r in mutes:
         items.append((r["user_id"],
-                      f"{r['full_name']} — мут до {fmt_until(r['until'])}"))
+                      f"{r['full_name']} — мут до {fmt_until(r['until'])}"
+                      f"{await suffix(r['user_id'])}"))
     context.user_data["list_ids"] = [uid for uid, _ in items]
 
     if not items:

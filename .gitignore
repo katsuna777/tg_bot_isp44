@@ -5,3 +5,4 @@ bot.db
 bot.db-journal
 .env
 .idea/
+members.csv

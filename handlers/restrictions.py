@@ -160,6 +160,17 @@ async def remove_mute(message, context: ContextTypes.DEFAULT_TYPE) -> None:
     await show_card(message, context, uid)
 
 
+# ---------- сброс счётчика ----------
+
+async def reset_stats(message, context: ContextTypes.DEFAULT_TYPE) -> None:
+    uid = _sel(context)
+    if uid is None:
+        return
+    await database.clear_violations(uid)
+    await message.reply_text("Счётчик срабатываний сброшен.")
+    await show_card(message, context, uid)
+
+
 # ---------- удаление ----------
 
 async def ask_delete(message, context: ContextTypes.DEFAULT_TYPE) -> None:

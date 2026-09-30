@@ -39,6 +39,7 @@ from handlers.common import (
     BTN_MUTE_EDIT,
     BTN_NEXT,
     BTN_PREV,
+    BTN_RESET,
     BTN_RESTRICTED,
     BTN_SLOW,
     BTN_SLOW_EDIT,
@@ -67,6 +68,7 @@ from handlers.restrictions import (
     handle_csv,
     remove_mute,
     remove_slow,
+    reset_stats,
     save_add_id,
     save_add_name,
     save_mute_custom,
@@ -77,6 +79,8 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     level=logging.INFO,
 )
+# глушим шум поллинга, чтобы в journalctl были видны только наши строки
+logging.getLogger("httpx").setLevel(logging.WARNING)
 log = logging.getLogger("college_bot")
 
 
@@ -180,6 +184,9 @@ async def on_text(update: Update,
             return
         if text == BTN_DELETE:
             await ask_delete(msg, context)
+            return
+        if text == BTN_RESET:
+            await reset_stats(msg, context)
             return
         if text == BTN_BACK:
             back = context.user_data.get("return_to", "members")
