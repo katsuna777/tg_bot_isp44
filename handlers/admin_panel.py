@@ -18,6 +18,7 @@ from handlers.common import (
     BTN_MUTE_EDIT,
     BTN_NEXT,
     BTN_PREV,
+    BTN_RESET,
     BTN_RESTRICTED,
     BTN_SLOW,
     BTN_SLOW_EDIT,
